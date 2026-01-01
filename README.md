@@ -1,45 +1,143 @@
-```markdown
-# Repository Documentation
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
-## 1. Overview
+namespace Acme.UserManagement.Services
+{
+    /// <summary>
+    /// Service responsible for managing user-related operations such as
+    /// creation, retrieval, and deactivation.
+    /// </summary>
+    public class UserService : IUserService
+    {
+        private readonly IUserRepository _userRepository;
+        private readonly ILogger<UserService> _logger;
+        private readonly UserServiceOptions _options;
 
-This document serves as the official `README.md` for this repository. Its purpose is to provide a comprehensive overview, guide on usage, and detail key aspects of the codebase.
+        /// <summary>
+        /// Initializes a new instance of the <see cref="UserService"/> class.
+        /// </summary>
+        public UserService(
+            IUserRepository userRepository,
+            ILogger<UserService> logger,
+            IOptions<UserServiceOptions> options)
+        {
+            _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        }
 
-**Assumption:** This repository is intended to house a single primary file, `Testfile`, and associated documentation.
+        /// <summary>
+        /// Creates a new user in the system.
+        /// </summary>
+        /// <param name="request">User creation request payload.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>The created user.</returns>
+        public async Task<User> CreateUserAsync(
+            CreateUserRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
 
-## 2. Purpose
+            _logger.LogInformation("Creating user with email {Email}", request.Email);
 
-The specific purpose of the code within this repository, particularly `Testfile`, cannot be determined at this time as the content of `Testfile` was not provided.
+            if (!request.Email.EndsWith(_options.AllowedEmailDomain))
+                throw new InvalidOperationException("Email domain not allowed.");
 
-**Assumption:** `Testfile` likely encapsulates a core module, script, or component relevant to this repository's overall objective.
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = request.Email,
+                Name = request.Name,
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow
+            };
 
-## 3. Key Components
+            await _userRepository.AddAsync(user, cancellationToken);
 
-Due to the absence of the `Testfile` content, a detailed breakdown of its key components is not possible.
+            return user;
+        }
 
-**Assumption:** If `Testfile` were available, this section would delineate major classes, functions, modules, or architectural layers present within it.
+        /// <summary>
+        /// Retrieves a user by identifier.
+        /// </summary>
+        public async Task<User?> GetUserAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            return await _userRepository.GetByIdAsync(userId, cancellationToken);
+        }
 
-## 4. Public Interfaces / Functions
+        /// <summary>
+        /// Deactivates an existing user.
+        /// </summary>
+        public async Task DeactivateUserAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
 
-Without the content of `Testfile`, we cannot identify or describe any public interfaces, functions, or APIs exposed by the code.
+            if (user == null)
+            {
+                _logger.LogWarning("Attempted to deactivate non-existing user {UserId}", userId);
+                return;
+            }
 
-**Assumption:** This section would typically list entry points, key callable functions, or methods that external modules or users are expected to interact with, along with their parameters and return types.
+            user.IsActive = false;
+            await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+    }
 
-## 5. Configuration / Environment variables
+    /// <summary>
+    /// Configuration options for <see cref="UserService"/>.
+    /// </summary>
+    public class UserServiceOptions
+    {
+        public string AllowedEmailDomain { get; set; } = "@example.com";
+    }
 
-Information regarding required configuration files, environment variables, or other external settings cannot be provided as the content of `Testfile` is unknown.
+    /// <summary>
+    /// User creation request DTO.
+    /// </summary>
+    public class CreateUserRequest
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+    }
 
-**Assumption:** If `Testfile` were provided, this section would detail any `.env` variables, configuration files (e.g., `config.json`, `settings.yaml`), or command-line arguments it might depend on.
+    /// <summary>
+    /// Domain model representing a user.
+    /// </summary>
+    public class User
+    {
+        public Guid Id { get; set; }
+        public string Email { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+        public DateTime CreatedAtUtc { get; set; }
+    }
 
-## 6. Usage Example
+    /// <summary>
+    /// Abstraction for user persistence.
+    /// </summary>
+    public interface IUserRepository
+    {
+        Task AddAsync(User user, CancellationToken cancellationToken);
+        Task<User?> GetByIdAsync(Guid userId, CancellationToken cancellationToken);
+        Task UpdateAsync(User user, CancellationToken cancellationToken);
+    }
 
-A practical usage example cannot be provided without access to the code in `Testfile`.
-
-**Assumption:** This section would typically include code snippets demonstrating how to initialize, call, and interact with the primary functionalities of `Testfile`, including any necessary setup steps.
-
-## 7. Edge Cases / Notes
-
-Detailed notes on edge cases, known limitations, or critical considerations for `Testfile` are not available due to the missing content.
-
-**Assumption:** This section would cover scenarios like error handling specifics, performance considerations, dependency caveats, or non-obvious behaviors observed during development or testing of `Testfile`.
-```
+    /// <summary>
+    /// Public contract for user services.
+    /// </summary>
+    public interface IUserService
+    {
+        Task<User> CreateUserAsync(CreateUserRequest request, CancellationToken cancellationToken);
+        Task<User?> GetUserAsync(Guid userId, CancellationToken cancellationToken);
+        Task DeactivateUserAsync(Guid userId, CancellationToken cancellationToken);
+    }
+}
