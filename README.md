@@ -7,210 +7,211 @@ The `UserService` is a core component within the `Acme.UserManagement.Services` 
 
 ## 2. Purpose
 
-The primary purpose of the `UserService` is to provide a centralized and consistent interface for managing user entities throughout their lifecycle. This includes, but is not limited to, user creation, retrieval, updates, deletions (both soft and hard), and potentially authentication-related operations such as password management. It encapsulates the business logic associated with user operations, ensuring data integrity and adherence to application-specific rules, decoupling these concerns from presentation or API layers.
+The primary purpose of the `UserService` is to provide a centralized and consistent interface for managing user entities within the Acme ecosystem. This includes operations such as user creation, retrieval, updates, and deletion, ensuring data integrity and adherence to business rules.
 
 ## 3. Key Components
 
-The `UserService` relies on several injected dependencies to perform its operations. Based on typical service architecture, these would include:
+The `UserService` typically interacts with and leverages the following internal and external components:
 
-*   **`IUserRepository`**: An interface responsible for data access operations related to user entities (e.g., CRUD operations against a database).
-    *   *Assumption*: Provides methods like `AddAsync`, `GetByIdAsync`, `GetByEmailAsync`, `UpdateAsync`, `DeleteAsync`.
-*   **`ILogger<UserService>`**: For logging operational events, warnings, and errors.
-    *   *Assumption*: Utilizes standard logging frameworks (e.g., `Microsoft.Extensions.Logging`).
-*   **`IMapper`**: (e.g., AutoMapper) For mapping between domain entities (e.g., `User` entity) and Data Transfer Objects (DTOs) used by the service's public interfaces (e.g., `UserDto`, `UserCreationDto`).
-    *   *Assumption*: Facilitates separation of concerns and prevents direct exposure of persistence models.
-*   **`IPasswordHasher`**: An interface responsible for securely hashing and verifying user passwords.
-    *   *Assumption*: Implements a strong, configurable hashing algorithm (e.g., BCrypt, Argon2, PBKDF2).
-*   **`IOptions<UserManagementSettings>`**: For accessing service-specific configuration settings.
-    *   *Assumption*: Provides access to settings like default roles, password policies, etc.
-*   **`IValidator<T>`**: (Optional, but good practice) Interfaces for validating input DTOs before processing.
-    *   *Assumption*: Utilizes a library like FluentValidation for complex validation rules.
+*   **Data Access Layer (Repository)**: An interface (e.g., `IUserRepository`) and its implementation responsible for abstracting data storage (e.g., a database). This component handles CRUD operations on the `User` entity persistence.
+*   **User Entity/Model**: The core domain model representing a user, containing properties such as `Id`, `Email`, `FirstName`, `LastName`, `CreationDate`, `LastModifiedDate`, etc.
+*   **Data Transfer Objects (DTOs)**: Specific classes (e.g., `CreateUserRequest`, `UpdateUserRequest`, `UserDto`) used for data input and output to decouple the service's public interface from internal domain models.
+*   **Logging**: An integrated logging mechanism (e.g., `ILogger` from Microsoft.Extensions.Logging) to record service operations, errors, and diagnostic information.
+*   **Configuration**: Access to application-wide and service-specific settings (e.g., via `IOptions<T>`).
+*   **Mapping Library**: (Assumption: AutoMapper or similar) A library used to map between `User` entities and various DTOs.
 
 ## 4. Public Interfaces / Functions
 
-The `UserService` exposes the following public methods for managing user accounts.
-
-*   **`Task<UserDto> CreateUserAsync(UserCreationDto userCreationDto)`**
-    *   **Description**: Creates a new user account. Includes password hashing and initial role assignment.
-    *   **Parameters**:
-        *   `userCreationDto`: An object containing the necessary data for user creation (e.g., `Email`, `Password`, `FirstName`, `LastName`).
-    *   **Returns**: A `UserDto` representing the newly created user.
-    *   **Throws**: `ValidationException` (if input is invalid), `DuplicateUserException` (if user with same email already exists).
-
-*   **`Task<UserDto?> GetUserByIdAsync(Guid userId)`**
-    *   **Description**: Retrieves a user by their unique identifier.
-    *   **Parameters**:
-        *   `userId`: The `Guid` of the user to retrieve.
-    *   **Returns**: A `UserDto` if found, otherwise `null`.
-
-*   **`Task<UserDto?> GetUserByEmailAsync(string email)`**
-    *   **Description**: Retrieves a user by their email address.
-    *   **Parameters**:
-        *   `email`: The email address of the user to retrieve.
-    *   **Returns**: A `UserDto` if found, otherwise `null`.
-
-*   **`Task<IEnumerable<UserDto>> SearchUsersAsync(UserSearchCriteria criteria)`**
-    *   **Description**: Retrieves a paged and filtered list of users based on specified criteria.
-    *   **Parameters**:
-        *   `criteria`: An object containing search parameters (e.g., `EmailContains`, `NameContains`, `PageNumber`, `PageSize`, `SortBy`).
-    *   **Returns**: A collection of `UserDto` matching the criteria.
-
-*   **`Task<UserDto> UpdateUserAsync(Guid userId, UserUpdateDto userUpdateDto)`**
-    *   **Description**: Updates an existing user's details.
-    *   **Parameters**:
-        *   `userId`: The `Guid` of the user to update.
-        *   `userUpdateDto`: An object containing the fields to update (e.g., `FirstName`, `LastName`, `IsActive`, `Roles`).
-    *   **Returns**: The `UserDto` with updated information.
-    *   **Throws**: `UserNotFoundException` (if user does not exist), `ValidationException` (if input is invalid).
-
-*   **`Task ChangePasswordAsync(Guid userId, string currentPassword, string newPassword)`**
-    *   **Description**: Allows a user to change their password.
-    *   **Parameters**:
-        *   `userId`: The `Guid` of the user.
-        *   `currentPassword`: The user's current password for verification.
-        *   `newPassword`: The new password.
-    *   **Throws**: `UserNotFoundException`, `InvalidPasswordException` (if current password doesn't match), `ValidationException` (if new password doesn't meet policy).
-
-*   **`Task DeleteUserAsync(Guid userId, bool hardDelete = false)`**
-    *   **Description**: Deletes a user account. Supports both soft deletion (marking as inactive) and hard deletion (permanent removal).
-    *   **Parameters**:
-        *   `userId`: The `Guid` of the user to delete.
-        *   `hardDelete`: If `true`, permanently removes the user; otherwise, marks the user as inactive.
-    *   **Throws**: `UserNotFoundException`.
-
-## 5. Configuration / Environment variables
-
-The `UserService` expects certain configurations to be available, typically managed via `appsettings.json` and environment variables in production.
-
-*   **`UserManagementSettings:DefaultRoleForNewUsers`**:
-    *   **Type**: `string`
-    *   **Description**: The default role assigned to a user upon creation.
-    *   **Example**: `"User"`
-*   **`UserManagementSettings:PasswordPolicy:MinimumLength`**:
-    *   **Type**: `int`
-    *   **Description**: Minimum allowed length for user passwords.
-*   **`UserManagementSettings:PasswordPolicy:RequireUppercase`**:
-    *   **Type**: `bool`
-    *   **Description**: Whether passwords must contain at least one uppercase character.
-*   **`UserManagementSettings:PasswordPolicy:RequireLowercase`**:
-    *   **Type**: `bool`
-    *   **Description**: Whether passwords must contain at least one lowercase character.
-*   **`UserManagementSettings:PasswordPolicy:RequireDigit`**:
-    *   **Type**: `bool`
-    *   **Description**: Whether passwords must contain at least one digit.
-*   **`UserManagementSettings:PasswordPolicy:RequireNonAlphanumeric`**:
-    *   **Type**: `bool`
-    *   **Description**: Whether passwords must contain at least one non-alphanumeric character.
-*   **`ConnectionStrings:UserManagementDb`**:
-    *   **Type**: `string`
-    *   **Description**: Connection string for the user management database. This is typically consumed by the `IUserRepository` implementation.
-    *   *Assumption*: The `UserService` indirectly relies on this via its repository dependency.
-
-These settings are typically loaded into a `UserManagementSettings` class and injected via `IOptions<UserManagementSettings>`.
-
-## 6. Usage Example
-
-To use the `UserService`, it must be registered with the Dependency Injection (DI) container. Below is an example of how to register and then consume the service in a typical ASP.NET Core application.
-
-**1. Service Registration (e.g., `Startup.cs` or `Program.cs` in .NET 6+)**
+The `UserService` exposes a public interface, `IUserService`, to enable user management operations. Below are common methods typically found in such a service:
 
 ```csharp
-// Assuming extensions for adding repository, mapper, password hasher, etc.
-public void ConfigureServices(IServiceCollection services)
+public interface IUserService
 {
-    // Register configuration options
-    services.Configure<UserManagementSettings>(Configuration.GetSection("UserManagementSettings"));
+    /// <summary>
+    /// Creates a new user based on the provided request.
+    /// </summary>
+    /// <param name="request">Data for creating the user.</param>
+    /// <returns>A DTO representing the newly created user.</returns>
+    /// <exception cref="UserAlreadyExistsException">Thrown if a user with the same unique identifier (e.g., email) already exists.</exception>
+    /// <exception cref="ValidationException">Thrown if the input request is invalid.</exception>
+    Task<UserDto> CreateUserAsync(CreateUserRequest request);
 
-    // Register dependencies
-    services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>(); // Example
-    services.AddScoped<IUserRepository, SqlUserRepository>();     // Example
-    services.AddAutoMapper(typeof(Startup));                     // Example, for DTO mapping
+    /// <summary>
+    /// Retrieves a user by their unique identifier.
+    /// </summary>
+    /// <param name="userId">The unique ID of the user.</param>
+    /// <returns>A DTO representing the user, or null if not found.</returns>
+    Task<UserDto?> GetUserByIdAsync(Guid userId);
 
-    // Register the UserService itself
-    services.AddScoped<UserService>();
+    /// <summary>
+    /// Retrieves a user by their email address.
+    /// </summary>
+    /// <param name="email">The email address of the user.</param>
+    /// <returns>A DTO representing the user, or null if not found.</returns>
+    Task<UserDto?> GetUserByEmailAsync(string email);
 
-    // Register DTO validators (if using)
-    services.AddScoped<IValidator<UserCreationDto>, UserCreationDtoValidator>();
-    services.AddScoped<IValidator<UserUpdateDto>, UserUpdateDtoValidator>();
+    /// <summary>
+    /// Updates an existing user's information.
+    /// </summary>
+    /// <param name="userId">The unique ID of the user to update.</param>
+    /// <param name="request">Data for updating the user.</param>
+    /// <returns>A DTO representing the updated user.</returns>
+    /// <exception cref="UserNotFoundException">Thrown if the specified user does not exist.</exception>
+    /// <exception cref="ValidationException">Thrown if the input request is invalid.</exception>
+    Task<UserDto> UpdateUserAsync(Guid userId, UpdateUserRequest request);
+
+    /// <summary>
+    /// Deletes a user by their unique identifier.
+    /// </summary>
+    /// <param name="userId">The unique ID of the user to delete.</param>
+    /// <exception cref="UserNotFoundException">Thrown if the specified user does not exist.</exception>
+    Task DeleteUserAsync(Guid userId);
+
+    /// <summary>
+    /// Retrieves a collection of all users.
+    /// </summary>
+    /// <returns>An enumerable collection of user DTOs.</returns>
+    Task<IEnumerable<UserDto>> GetAllUsersAsync();
 }
 ```
 
-**2. Service Consumption (e.g., in a Controller or other service)**
+## 5. Configuration / Environment variables
+
+The `UserService` may rely on the following configuration settings, typically loaded from `appsettings.json`, environment variables, or other configuration providers:
+
+*   **`ConnectionStrings:UserDb`**: The connection string for the database where user data is persisted.
+    *   Example: `Server=my-db-server;Database=UserManagementDb;User Id=dbuser;Password=dbpassword;`
+*   **`Logging:LogLevel:Default`**: Controls the default logging verbosity for the service.
+    *   Example: `Information`, `Warning`, `Error`, `Debug`, `Trace`.
+*   **`UserService:AllowUserCreation`**: A boolean flag to enable/disable user creation via the service.
+    *   Example: `true` or `false`.
+*   **`UserService:MaxUsersLimit`**: An integer defining the maximum number of users allowed in the system. (Assumption: This is a potential configuration, not universally required).
+
+## 6. Usage Example
+
+To use the `UserService` in a .NET application, it should typically be registered with the Dependency Injection container and then injected into consumers (e.g., API controllers, background services).
+
+**1. Registering the service in `Program.cs` (or `Startup.cs`):**
 
 ```csharp
-using Acme.UserManagement.Services;
-using Acme.UserManagement.Services.Models; // Assuming DTOs are here
-using Microsoft.AspNetCore.Mvc;
-using System;
-using System.Threading.Tasks;
-
-[ApiController]
-[Route("api/[controller]")]
-public class UsersController : ControllerBase
+// Program.cs
+public class Program
 {
-    private readonly UserService _userService;
-    private readonly ILogger<UsersController> _logger;
-
-    public UsersController(UserService userService, ILogger<UsersController> logger)
+    public static void Main(string[] args)
     {
-        _userService = userService;
-        _logger = logger;
-    }
+        var builder = WebApplication.CreateBuilder(args);
 
-    [HttpPost]
-    public async Task<IActionResult> CreateUser([FromBody] UserCreationDto userDto)
+        // Add services to the container.
+        builder.Services.AddControllers();
+
+        // Register the IUserRepository and UserRepository implementation
+        // Assumption: Using a simple in-memory repository for example, replace with actual DB implementation
+        builder.Services.AddSingleton<IUserRepository, InMemoryUserRepository>(); 
+
+        // Register the IUserService and UserService implementation
+        builder.Services.AddScoped<IUserService, UserService>();
+
+        var app = builder.Build();
+
+        // Configure the HTTP request pipeline.
+        app.UseAuthorization();
+        app.MapControllers();
+        app.Run();
+    }
+}
+```
+
+**2. Injecting and using the service in an API Controller:**
+
+```csharp
+// Controllers/UsersController.cs
+using Microsoft.AspNetCore.Mvc;
+using Acme.UserManagement.Services.Models; // Assuming DTOs are in this namespace
+
+namespace Acme.UserManagement.Api.Controllers
+{
+    [ApiController]
+    [Route("api/users")]
+    public class UsersController : ControllerBase
     {
-        if (!ModelState.IsValid)
+        private readonly IUserService _userService;
+        private readonly ILogger<UsersController> _logger;
+
+        public UsersController(IUserService userService, ILogger<UsersController> logger)
         {
-            return BadRequest(ModelState);
+            _userService = userService;
+            _logger = logger;
         }
 
-        try
+        /// <summary>
+        /// Creates a new user.
+        /// </summary>
+        [HttpPost]
+        [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request)
         {
-            var createdUser = await _userService.CreateUserAsync(userDto);
-            return CreatedAtAction(nameof(GetUserById), new { userId = createdUser.Id }, createdUser);
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            try
+            {
+                _logger.LogInformation("Attempting to create user with email: {Email}", request.Email);
+                var newUser = await _userService.CreateUserAsync(request);
+                _logger.LogInformation("User created successfully with ID: {UserId}", newUser.Id);
+                return CreatedAtAction(nameof(GetUserById), new { userId = newUser.Id }, newUser);
+            }
+            catch (ValidationException ex)
+            {
+                _logger.LogWarning(ex, "Validation error during user creation: {Message}", ex.Message);
+                return BadRequest(new { Message = ex.Message });
+            }
+            catch (UserAlreadyExistsException ex)
+            {
+                _logger.LogWarning(ex, "User creation failed: user with email '{Email}' already exists.", request.Email);
+                return Conflict(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An unexpected error occurred while creating user with email: {Email}", request.Email);
+                return StatusCode(StatusCodes.Status500InternalServerError, new { Message = "An unexpected error occurred." });
+            }
         }
-        catch (DuplicateUserException ex)
+
+        /// <summary>
+        /// Retrieves a user by their ID.
+        /// </summary>
+        [HttpGet("{userId:guid}")]
+        [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetUserById(Guid userId)
         {
-            _logger.LogWarning(ex, "Attempted to create duplicate user with email: {Email}", userDto.Email);
-            return Conflict(new { message = $"User with email '{userDto.Email}' already exists." });
+            _logger.LogInformation("Attempting to retrieve user with ID: {UserId}", userId);
+            var user = await _userService.GetUserByIdAsync(userId);
+            if (user == null)
+            {
+                _logger.LogWarning("User with ID: {UserId} not found.", userId);
+                return NotFound();
+            }
+            return Ok(user);
         }
-        catch (ValidationException ex)
-        {
-            _logger.LogError(ex, "User creation failed due to validation errors.");
-            return BadRequest(new { message = "Input validation failed.", errors = ex.Errors });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An unexpected error occurred during user creation.");
-            return StatusCode(500, "An internal server error occurred.");
-        }
+
+        // Other CRUD endpoints (UpdateUser, DeleteUser, GetAllUsers) would follow a similar pattern.
     }
-
-    [HttpGet("{userId:guid}")]
-    public async Task<IActionResult> GetUserById(Guid userId)
-    {
-        var user = await _userService.GetUserByIdAsync(userId);
-        if (user == null)
-        {
-            return NotFound();
-        }
-        return Ok(user);
-    }
-
-    // Other actions like UpdateUser, DeleteUser, ChangePassword would follow similar patterns.
 }
 ```
 
 ## 7. Edge Cases / Notes
 
-*   **Concurrency**: Multiple requests attempting to update the same user simultaneously could lead to race conditions. The `IUserRepository` implementation should handle optimistic concurrency control (e.g., using row versions/timestamps) for update operations.
-*   **Data Validation**: All input DTOs (e.g., `UserCreationDto`, `UserUpdateDto`) must be thoroughly validated at the service boundary to prevent invalid data from reaching the persistence layer. This includes format validation (email, password strength), uniqueness checks (email), and business rule validation.
-*   **Soft vs. Hard Delete**: The `DeleteUserAsync` method supports both. Soft deletion (`IsActive = false`) is generally preferred for auditing, referential integrity, and potential user recovery. Hard deletion should be used with caution and potentially require additional authorization.
-*   **Password Security**: Passwords are never stored in plain text. They are hashed using `IPasswordHasher` before persistence and verified using the same hasher. The `IPasswordHasher` should use a strong, salt-based, and computationally intensive algorithm.
-*   **Error Handling**: The service methods are designed to throw specific exceptions (e.g., `UserNotFoundException`, `DuplicateUserException`, `ValidationException`) to signal distinct failure conditions, allowing callers to handle them appropriately. Generic `Exception` catches should be avoided when more specific errors are possible.
-*   **Logging**: Comprehensive logging is essential for auditing, debugging, and operational monitoring. Log entries should capture relevant user identifiers (e.g., `userId`, `email`) and operational outcomes without exposing sensitive data.
-*   **Extensibility**: Consider the need for future extensions (e.g., adding more user attributes, integrating with external identity providers). The service's design should facilitate adding new features without major refactoring.
-*   **Transaction Management**: Complex operations involving multiple data changes should be wrapped in database transactions to ensure atomicity. The `IUserRepository` or an external unit-of-work pattern would typically manage this.
-*   **Sensitive Data Handling**: Ensure that `UserDto`s returned by the service do not expose sensitive information like password hashes or internal system IDs unless explicitly required and authorized.
+*   **Concurrency**: Multiple concurrent requests to modify the same user might lead to race conditions. The underlying data access layer should handle optimistic concurrency or proper locking mechanisms.
+*   **Data Validation**: All incoming requests (e.g., `CreateUserRequest`, `UpdateUserRequest`) must be thoroughly validated at the service layer to ensure data integrity and adherence to business rules (e.g., email format, password complexity, required fields).
+*   **Non-existent Entities**: Requests targeting non-existent users (e.g., `GetUserById` for an invalid ID, `UpdateUser` for a deleted user) should be gracefully handled, typically by returning `null` or throwing specific `NotFound` exceptions.
+*   **Duplicate Entities**: Attempts to create a user with a unique identifier (like email) that already exists should be prevented, typically by throwing a `UserAlreadyExistsException`.
+*   **Error Handling**: The service should implement robust error handling, catching specific exceptions from the data access layer or other dependencies and re-throwing more generic, service-specific exceptions or wrapping them for consistent API responses.
+*   **Security (Authorization)**: While the `UserService` focuses on operations, calling layers (e.g., API controllers) are responsible for authorization checks (who can perform which user management operation). The service itself doesn't typically implement authorization but relies on authenticated user context.
+*   **Performance**: For operations retrieving large numbers of users, consider pagination and filtering to avoid performance bottlenecks and excessive memory consumption.
+*   **Soft Deletion**: If users are "soft deleted" (marked as inactive instead of permanently removed from the database), the service methods (`GetUserById`, `GetAllUsers`) need to account for this and potentially offer options to retrieve soft-deleted users.
 ```
